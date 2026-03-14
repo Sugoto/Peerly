@@ -1,0 +1,15 @@
+{
+  "name": "p2p-video-streaming",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "dev:web": "bun run --filter web dev",
+    "dev:signaling": "bun run --filter signaling dev"
+  },
+  "devDependencies": {
+    "turbo": "latest",
+    "typescript": "latest"
+  }
+}
