@@ -12,7 +12,6 @@ import { useAdaptiveBitrate } from "@/hooks/use-adaptive-bitrate";
 import { useE2EE } from "@/hooks/use-e2ee";
 import { ParticipantGrid } from "@/components/participant-grid";
 import { RoomControls } from "@/components/room-controls";
-import { ConnectionStatus } from "@/components/connection-status";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { ChatPanel } from "@/components/chat-panel";
 import { CaptionsOverlay } from "@/components/captions-overlay";
@@ -37,6 +36,9 @@ export default function RoomPage({
   );
   const [chatOpen, setChatOpen] = useState(false);
   const [statsVisible, setStatsVisible] = useState(false);
+  const [unreadChat, setUnreadChat] = useState(0);
+  const chatOpenRef = useRef(false);
+  chatOpenRef.current = chatOpen;
 
   const mediaOptions = useMemo(
     () => ({
@@ -81,6 +83,15 @@ export default function RoomPage({
   const noiseSuppression = useNoiseSuppression();
   const qualityLevel = useAdaptiveBitrate(peers);
   const e2ee = useE2EE(peers, sendData, onData);
+
+  useEffect(() => {
+    const unsub = onData((msg) => {
+      if ((msg.type === "chat" || msg.type === "file-meta") && !chatOpenRef.current) {
+        setUnreadChat((prev) => prev + 1);
+      }
+    });
+    return unsub;
+  }, [onData]);
 
   useEffect(() => {
     if (!cameFromLanding || joinedRef.current) return;
@@ -147,22 +158,19 @@ export default function RoomPage({
           <h1 className="text-lg font-semibold">Peerly Room {roomId}</h1>
           <CopyLinkButton roomId={roomId} />
         </div>
-        <div className="flex items-center gap-2">
-          {e2ee.active && (
-            <div
-              className="hidden items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500 sm:flex"
-              title={e2ee.verificationCode ? `Verification code: ${e2ee.verificationCode}` : "E2EE active"}
-            >
-              <ShieldCheck className="h-3 w-3" />
-              E2EE{e2ee.verificationCode ? ` · ${e2ee.verificationCode}` : ""}
-            </div>
-          )}
-          <ConnectionStatus isConnected={isConnected} peerCount={peers.size} />
-        </div>
+        {e2ee.active && (
+          <div
+            className="hidden items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500 sm:flex"
+            title={e2ee.verificationCode ? `Verification code: ${e2ee.verificationCode}` : "E2EE active"}
+          >
+            <ShieldCheck className="h-3 w-3" />
+            E2EE{e2ee.verificationCode ? ` · ${e2ee.verificationCode}` : ""}
+          </div>
+        )}
       </motion.header>
 
-      <div className="relative flex flex-1 overflow-hidden">
-        <main className="relative flex-1 overflow-hidden">
+      <div className="relative flex-1 overflow-hidden">
+        <main className={`h-full ${chatOpen ? "hidden sm:block" : ""}`}>
           <ParticipantGrid
             localStream={stream}
             peers={peers}
@@ -192,11 +200,15 @@ export default function RoomPage({
           isCaptionsSupported={captionsHook.isSupported}
           isStatsVisible={statsVisible}
           isNoiseSuppressionEnabled={noiseSuppression.enabled}
+          unreadChatCount={unreadChat}
           peerCount={peers.size}
           onToggleAudio={toggleAudio}
           onToggleVideo={toggleVideo}
           onToggleScreenShare={handleScreenShare}
-          onToggleChat={() => setChatOpen((prev) => !prev)}
+          onToggleChat={() => {
+            setChatOpen((prev) => !prev);
+            setUnreadChat(0);
+          }}
           onToggleCaptions={captionsHook.toggle}
           onToggleStats={() => setStatsVisible((prev) => !prev)}
           onToggleNoiseSuppression={handleNoiseSuppression}

@@ -30,6 +30,7 @@ interface RoomControlsProps {
   isCaptionsSupported: boolean;
   isStatsVisible: boolean;
   isNoiseSuppressionEnabled: boolean;
+  unreadChatCount: number;
   peerCount: number;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
@@ -47,12 +48,14 @@ function ControlButton({
   onClick,
   variant = "secondary",
   className = "",
+  disabled = false,
 }: {
   tooltip: string;
   icon: React.ComponentType<{ className?: string }>;
   onClick: () => void;
   variant?: "secondary" | "destructive" | "default";
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <Tooltip>
@@ -62,6 +65,7 @@ function ControlButton({
             variant={variant}
             size="icon"
             onClick={onClick}
+            disabled={disabled}
             className={`h-10 w-10 rounded-full sm:h-11 sm:w-11 ${className}`}
           />
         }
@@ -84,6 +88,7 @@ export function RoomControls({
   isCaptionsSupported,
   isStatsVisible,
   isNoiseSuppressionEnabled,
+  unreadChatCount,
   peerCount,
   onToggleAudio,
   onToggleVideo,
@@ -120,26 +125,43 @@ export function RoomControls({
         icon={isScreenSharing ? MonitorOff : Monitor}
         onClick={onToggleScreenShare}
         variant={isScreenSharing ? "destructive" : "secondary"}
-        className="hidden sm:flex"
       />
       <ControlButton
-        tooltip={isNoiseSuppressionEnabled ? "Disable noise suppression" : "Enable noise suppression"}
+        tooltip={!isAudioEnabled ? "Enable mic first" : isNoiseSuppressionEnabled ? "Disable noise suppression" : "Enable noise suppression"}
         icon={AudioLines}
         onClick={onToggleNoiseSuppression}
         variant={isNoiseSuppressionEnabled ? "default" : "secondary"}
+        disabled={!isAudioEnabled}
       />
-      <ControlButton
-        tooltip={isChatOpen ? "Close chat" : "Open chat"}
-        icon={MessageSquare}
-        onClick={onToggleChat}
-        variant={isChatOpen ? "default" : "secondary"}
-      />
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant={isChatOpen ? "default" : "secondary"}
+              size="icon"
+              onClick={onToggleChat}
+              className="relative h-10 w-10 rounded-full sm:h-11 sm:w-11"
+            />
+          }
+        >
+          <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
+          {unreadChatCount > 0 && !isChatOpen && (
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white">
+              {unreadChatCount > 9 ? "9+" : unreadChatCount}
+            </span>
+          )}
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={8}>
+          {isChatOpen ? "Close chat" : "Open chat"}
+        </TooltipContent>
+      </Tooltip>
       {isCaptionsSupported && (
         <ControlButton
           tooltip={isCaptionsEnabled ? "Turn off captions" : "Turn on captions"}
           icon={Captions}
           onClick={onToggleCaptions}
           variant={isCaptionsEnabled ? "default" : "secondary"}
+          className="hidden sm:flex"
         />
       )}
       {peerCount > 0 && (

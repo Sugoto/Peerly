@@ -175,11 +175,13 @@ export function ChatPanel({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  if (!open) return null;
-
   return (
-    <div className="flex h-full w-80 flex-col border-l border-border bg-card/50 backdrop-blur-sm">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+    <div
+      className={`absolute inset-y-0 right-0 z-30 flex w-full flex-col border-l border-border bg-background transition-transform duration-300 ease-in-out sm:w-80 ${
+        open ? "translate-x-0" : "translate-x-full"
+      }`}
+    >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold">Chat</h2>
         <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7">
           <X className="h-4 w-4" />
