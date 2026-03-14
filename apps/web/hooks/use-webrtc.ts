@@ -6,6 +6,7 @@ import { createPeerConnection } from "@/lib/webrtc";
 import { useSignaling } from "./use-signaling";
 import { useMediaStream } from "./use-media-stream";
 import type { ServerMessage } from "@/lib/types";
+import { encodeMessage, decodeMessage, type DataMessage } from "@/lib/data-messages";
 
 export interface PeerState {
   peerId: string;
@@ -18,6 +19,8 @@ interface WebRTCOptions {
   initialAudio?: boolean;
   initialVideo?: boolean;
 }
+
+type DataHandler = (msg: DataMessage, fromPeerId: string) => void;
 
 export function useWebRTC(roomId: string, options?: WebRTCOptions) {
   const peerId = useRef(nanoid(12));
@@ -32,10 +35,31 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
   const iceCandidateBuffer = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const remoteDescriptionSet = useRef<Set<string>>(new Set());
   const peerNames = useRef<Map<string, string>>(new Map());
+  const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
+  const dataHandlers = useRef<DataHandler[]>([]);
 
   const updatePeers = useCallback((fn: (map: Map<string, PeerState>) => void) => {
     fn(peersRef.current);
     setPeers(new Map(peersRef.current));
+  }, []);
+
+  const onData = useCallback((handler: DataHandler) => {
+    dataHandlers.current.push(handler);
+    return () => {
+      dataHandlers.current = dataHandlers.current.filter((h) => h !== handler);
+    };
+  }, []);
+
+  const sendData = useCallback((msg: DataMessage, targetPeerId?: string) => {
+    const encoded = encodeMessage(msg);
+    if (targetPeerId) {
+      const ch = dataChannels.current.get(targetPeerId);
+      if (ch?.readyState === "open") ch.send(encoded);
+    } else {
+      dataChannels.current.forEach((ch) => {
+        if (ch.readyState === "open") ch.send(encoded);
+      });
+    }
   }, []);
 
   const flushIceCandidates = useCallback(async (remotePeerId: string) => {
@@ -48,8 +72,26 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
     iceCandidateBuffer.current.delete(remotePeerId);
   }, []);
 
+  const setupDataChannel = useCallback((ch: RTCDataChannel, remotePeerId: string) => {
+    ch.onopen = () => {
+      dataChannels.current.set(remotePeerId, ch);
+    };
+    ch.onmessage = (event) => {
+      const msg = decodeMessage(event.data);
+      if (msg) {
+        dataHandlers.current.forEach((h) => h(msg, remotePeerId));
+      }
+    };
+    ch.onclose = () => {
+      dataChannels.current.delete(remotePeerId);
+    };
+    if (ch.readyState === "open") {
+      dataChannels.current.set(remotePeerId, ch);
+    }
+  }, []);
+
   const createConnection = useCallback(
-    (remotePeerId: string): RTCPeerConnection => {
+    (remotePeerId: string, isInitiator: boolean): RTCPeerConnection => {
       const existing = peersRef.current.get(remotePeerId);
       if (existing) {
         existing.connection.close();
@@ -62,6 +104,15 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
         stream.getTracks().forEach((track) => {
           pc.addTrack(track, stream);
         });
+      }
+
+      if (isInitiator) {
+        const ch = pc.createDataChannel("data");
+        setupDataChannel(ch, remotePeerId);
+      } else {
+        pc.ondatachannel = (event) => {
+          setupDataChannel(event.channel, remotePeerId);
+        };
       }
 
       pc.onicecandidate = (event) => {
@@ -96,6 +147,7 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
 
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+          dataChannels.current.delete(remotePeerId);
           updatePeers((map) => map.delete(remotePeerId));
         }
       };
@@ -111,7 +163,7 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
 
       return pc;
     },
-    [send, updatePeers]
+    [send, updatePeers, setupDataChannel]
   );
 
   const handleMessage = useCallback(
@@ -124,7 +176,7 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
           if (msg.peers.length > 0) {
             for (const peerInfo of msg.peers) {
               peerNames.current.set(peerInfo.peerId, peerInfo.displayName);
-              const pc = createConnection(peerInfo.peerId);
+              const pc = createConnection(peerInfo.peerId, true);
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
               send({
@@ -138,7 +190,7 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
           break;
         }
         case "offer": {
-          const pc = createConnection(msg.fromPeerId);
+          const pc = createConnection(msg.fromPeerId, false);
           await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
           remoteDescriptionSet.current.add(msg.fromPeerId);
           await flushIceCandidates(msg.fromPeerId);
@@ -184,6 +236,7 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
             peer.connection.close();
             updatePeers((map) => map.delete(msg.peerId));
           }
+          dataChannels.current.delete(msg.peerId);
           peerNames.current.delete(msg.peerId);
           remoteDescriptionSet.current.delete(msg.peerId);
           iceCandidateBuffer.current.delete(msg.peerId);
@@ -218,6 +271,7 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
   const leaveRoom = useCallback(() => {
     peersRef.current.forEach((peer) => peer.connection.close());
     peersRef.current.clear();
+    dataChannels.current.clear();
     setPeers(new Map());
     peerNames.current.clear();
     remoteDescriptionSet.current.clear();
@@ -251,6 +305,8 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
     leaveRoom,
     isConnected,
     replaceTrackForAllPeers,
+    sendData,
+    onData,
     ...media,
   };
 }

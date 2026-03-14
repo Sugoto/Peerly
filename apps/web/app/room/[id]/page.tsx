@@ -5,9 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useWebRTC } from "@/hooks/use-webrtc";
+import { useCaptions } from "@/hooks/use-captions";
+import { useConnectionStats } from "@/hooks/use-connection-stats";
 import { ParticipantGrid } from "@/components/participant-grid";
 import { RoomControls } from "@/components/room-controls";
 import { ConnectionStatus } from "@/components/connection-status";
+import { ChatPanel } from "@/components/chat-panel";
+import { CaptionsOverlay } from "@/components/captions-overlay";
+import { StatsOverlay } from "@/components/stats-overlay";
 import { PreviewModal } from "@/components/preview-modal";
 
 export default function RoomPage({
@@ -25,6 +30,8 @@ export default function RoomPage({
   const [displayName, setDisplayName] = useState(
     searchParams.get("name") || ""
   );
+  const [chatOpen, setChatOpen] = useState(false);
+  const [statsVisible, setStatsVisible] = useState(false);
 
   const mediaOptions = useMemo(
     () => ({
@@ -48,7 +55,24 @@ export default function RoomPage({
     toggleVideo,
     toggleScreenShare,
     replaceTrackForAllPeers,
+    sendData,
+    onData,
   } = useWebRTC(roomId, mediaOptions);
+
+  const peerNames = useMemo(() => {
+    const map = new Map<string, string>();
+    peers.forEach((p) => map.set(p.peerId, p.displayName));
+    return map;
+  }, [peers]);
+
+  const captionsHook = useCaptions({
+    displayName: displayName || "You",
+    sendData,
+    onData,
+    peerNames,
+  });
+
+  const connectionStats = useConnectionStats(peers);
 
   useEffect(() => {
     if (!cameFromLanding || joinedRef.current) return;
@@ -95,11 +119,7 @@ export default function RoomPage({
   if (showPreview) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <PreviewModal
-          open
-          roomId={roomId}
-          onJoin={handlePreviewJoin}
-        />
+        <PreviewModal open roomId={roomId} onJoin={handlePreviewJoin} />
       </div>
     );
   }
@@ -117,22 +137,42 @@ export default function RoomPage({
         <ConnectionStatus isConnected={isConnected} peerCount={peers.size} />
       </motion.header>
 
-      <main className="flex-1 overflow-hidden">
-        <ParticipantGrid
-          localStream={stream}
-          peers={peers}
-          localName={displayName || "You"}
+      <div className="relative flex flex-1 overflow-hidden">
+        <main className="relative flex-1 overflow-hidden">
+          <ParticipantGrid
+            localStream={stream}
+            peers={peers}
+            localName={displayName || "You"}
+          />
+          <CaptionsOverlay captions={captionsHook.captions} />
+          <StatsOverlay stats={connectionStats} visible={statsVisible} />
+        </main>
+
+        <ChatPanel
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          displayName={displayName || "You"}
+          sendData={sendData}
+          onData={onData}
+          peerNames={peerNames}
         />
-      </main>
+      </div>
 
       <footer className="flex justify-center pb-4 pt-2">
         <RoomControls
           isAudioEnabled={isAudioEnabled}
           isVideoEnabled={isVideoEnabled}
           isScreenSharing={isScreenSharing}
+          isChatOpen={chatOpen}
+          isCaptionsEnabled={captionsHook.enabled}
+          isCaptionsSupported={captionsHook.isSupported}
+          isStatsVisible={statsVisible}
           onToggleAudio={toggleAudio}
           onToggleVideo={toggleVideo}
           onToggleScreenShare={handleScreenShare}
+          onToggleChat={() => setChatOpen((prev) => !prev)}
+          onToggleCaptions={captionsHook.toggle}
+          onToggleStats={() => setStatsVisible((prev) => !prev)}
           onLeave={handleLeave}
           roomId={roomId}
         />
