@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StreamLink — P2P Video Chat",
+  title: "Peerly — Encrypted P2P Communication",
   description:
-    "Free peer-to-peer video streaming. Create a room, share the link, connect instantly.",
+    "Free encrypted peer-to-peer video and audio calls. Create a room, share the link, connect instantly.",
 };
 
 export default function RootLayout({
