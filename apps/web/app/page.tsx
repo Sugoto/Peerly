@@ -1,17 +1,36 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { nanoid } from "nanoid";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { PreviewModal } from "@/components/preview-modal";
 import { Video, Zap, Globe, Shield } from "lucide-react";
 
 export default function Home() {
   const router = useRouter();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [roomId, setRoomId] = useState("");
 
-  const createRoom = () => {
-    const roomId = nanoid(8);
-    router.push(`/room/${roomId}`);
+  const handleCreateRoom = () => {
+    setRoomId(nanoid(8));
+    setPreviewOpen(true);
+  };
+
+  const handleJoin = (settings: {
+    roomId: string;
+    displayName: string;
+    audio: boolean;
+    video: boolean;
+  }) => {
+    setPreviewOpen(false);
+    const params = new URLSearchParams({
+      audio: String(settings.audio),
+      video: String(settings.video),
+      name: settings.displayName,
+    });
+    router.push(`/room/${settings.roomId}?${params}`);
   };
 
   return (
@@ -47,7 +66,7 @@ export default function Home() {
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Button
             size="lg"
-            onClick={createRoom}
+            onClick={handleCreateRoom}
             className="h-14 cursor-pointer rounded-full px-10 text-lg font-semibold"
           >
             <Video className="mr-2 h-5 w-5" />
@@ -87,6 +106,14 @@ export default function Home() {
           ))}
         </div>
       </motion.div>
+
+      <PreviewModal
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        roomId={roomId}
+        roomIdEditable
+        onJoin={handleJoin}
+      />
     </div>
   );
 }

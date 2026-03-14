@@ -9,19 +9,29 @@ import type { ServerMessage } from "@/lib/types";
 
 export interface PeerState {
   peerId: string;
+  displayName: string;
   stream: MediaStream;
   connection: RTCPeerConnection;
 }
 
-export function useWebRTC(roomId: string) {
+interface WebRTCOptions {
+  initialAudio?: boolean;
+  initialVideo?: boolean;
+}
+
+export function useWebRTC(roomId: string, options?: WebRTCOptions) {
   const peerId = useRef(nanoid(12));
   const { connect, disconnect, send, onMessage, isConnected } = useSignaling();
-  const media = useMediaStream();
+  const media = useMediaStream({
+    initialAudio: options?.initialAudio,
+    initialVideo: options?.initialVideo,
+  });
   const [peers, setPeers] = useState<Map<string, PeerState>>(new Map());
   const peersRef = useRef<Map<string, PeerState>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
   const iceCandidateBuffer = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const remoteDescriptionSet = useRef<Set<string>>(new Set());
+  const peerNames = useRef<Map<string, string>>(new Map());
 
   const updatePeers = useCallback((fn: (map: Map<string, PeerState>) => void) => {
     fn(peersRef.current);
@@ -75,6 +85,7 @@ export function useWebRTC(roomId: string) {
             } else {
               map.set(remotePeerId, {
                 peerId: remotePeerId,
+                displayName: peerNames.current.get(remotePeerId) || remotePeerId.slice(0, 6),
                 stream: remoteStream,
                 connection: pc,
               });
@@ -92,6 +103,7 @@ export function useWebRTC(roomId: string) {
       updatePeers((map) => {
         map.set(remotePeerId, {
           peerId: remotePeerId,
+          displayName: peerNames.current.get(remotePeerId) || remotePeerId.slice(0, 6),
           stream: new MediaStream(),
           connection: pc,
         });
@@ -106,15 +118,19 @@ export function useWebRTC(roomId: string) {
     async (msg: ServerMessage) => {
       switch (msg.type) {
         case "peer-joined": {
+          if ("displayName" in msg && msg.peerId !== peerId.current) {
+            peerNames.current.set(msg.peerId, msg.displayName);
+          }
           if (msg.peers.length > 0) {
-            for (const existingPeerId of msg.peers) {
-              const pc = createConnection(existingPeerId);
+            for (const peerInfo of msg.peers) {
+              peerNames.current.set(peerInfo.peerId, peerInfo.displayName);
+              const pc = createConnection(peerInfo.peerId);
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
               send({
                 type: "offer",
                 sdp: pc.localDescription!,
-                targetPeerId: existingPeerId,
+                targetPeerId: peerInfo.peerId,
                 fromPeerId: peerId.current,
               });
             }
@@ -168,6 +184,7 @@ export function useWebRTC(roomId: string) {
             peer.connection.close();
             updatePeers((map) => map.delete(msg.peerId));
           }
+          peerNames.current.delete(msg.peerId);
           remoteDescriptionSet.current.delete(msg.peerId);
           iceCandidateBuffer.current.delete(msg.peerId);
           break;
@@ -177,7 +194,7 @@ export function useWebRTC(roomId: string) {
     [createConnection, send, updatePeers, flushIceCandidates]
   );
 
-  const joinRoom = useCallback(async () => {
+  const joinRoom = useCallback(async (displayName: string) => {
     const localStream = await media.startMedia();
     if (!localStream) return;
 
@@ -187,13 +204,14 @@ export function useWebRTC(roomId: string) {
 
     await connect();
 
-    send({ type: "join", roomId, peerId: peerId.current });
+    send({ type: "join", roomId, peerId: peerId.current, displayName });
   }, [connect, onMessage, send, roomId, media, handleMessage]);
 
   const leaveRoom = useCallback(() => {
     peersRef.current.forEach((peer) => peer.connection.close());
     peersRef.current.clear();
     setPeers(new Map());
+    peerNames.current.clear();
     remoteDescriptionSet.current.clear();
     iceCandidateBuffer.current.clear();
     localStreamRef.current = null;

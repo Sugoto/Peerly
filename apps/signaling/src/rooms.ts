@@ -1,19 +1,28 @@
 import type { ServerWebSocket } from "bun";
+import type { PeerInfo } from "./types";
 
 export interface PeerSocket {
-  ws: ServerWebSocket<{ peerId: string; roomId: string }>;
+  ws: ServerWebSocket<{ peerId: string; roomId: string; displayName: string }>;
   peerId: string;
+  displayName: string;
 }
 
 const rooms = new Map<string, Map<string, PeerSocket>>();
 
-export function joinRoom(roomId: string, peerId: string, ws: ServerWebSocket<{ peerId: string; roomId: string }>): string[] {
+export function joinRoom(
+  roomId: string,
+  peerId: string,
+  displayName: string,
+  ws: ServerWebSocket<{ peerId: string; roomId: string; displayName: string }>
+): PeerInfo[] {
   if (!rooms.has(roomId)) {
     rooms.set(roomId, new Map());
   }
   const room = rooms.get(roomId)!;
-  room.set(peerId, { ws, peerId });
-  return Array.from(room.keys()).filter((id) => id !== peerId);
+  room.set(peerId, { ws, peerId, displayName });
+  return Array.from(room.values())
+    .filter((p) => p.peerId !== peerId)
+    .map((p) => ({ peerId: p.peerId, displayName: p.displayName }));
 }
 
 export function leaveRoom(roomId: string, peerId: string): void {

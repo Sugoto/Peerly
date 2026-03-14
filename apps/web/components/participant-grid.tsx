@@ -8,13 +8,13 @@ import { cn } from "@/lib/utils";
 interface ParticipantGridProps {
   localStream: MediaStream | null;
   peers: Map<string, PeerState>;
-  peerId: string;
+  localName: string;
 }
 
 export function ParticipantGrid({
   localStream,
   peers,
-  peerId,
+  localName,
 }: ParticipantGridProps) {
   const peerArray = Array.from(peers.values());
   const total = peerArray.length + 1;
@@ -36,14 +36,14 @@ export function ParticipantGrid({
           stream={localStream}
           muted
           isLocal
-          label={peerId.slice(0, 6)}
+          label={localName}
           className="min-h-[200px]"
         />
         {peerArray.map((peer) => (
           <VideoPlayer
             key={peer.peerId}
             stream={peer.stream}
-            label={peer.peerId.slice(0, 6)}
+            label={peer.displayName}
             className="min-h-[200px]"
           />
         ))}

@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useCallback, use } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useCallback, useState, use, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useWebRTC } from "@/hooks/use-webrtc";
 import { ParticipantGrid } from "@/components/participant-grid";
 import { RoomControls } from "@/components/room-controls";
 import { ConnectionStatus } from "@/components/connection-status";
+import { PreviewModal } from "@/components/preview-modal";
 
 export default function RoomPage({
   params,
@@ -16,7 +17,22 @@ export default function RoomPage({
 }) {
   const { id: roomId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const joinedRef = useRef(false);
+
+  const cameFromLanding = searchParams.has("name");
+  const [showPreview, setShowPreview] = useState(!cameFromLanding);
+  const [displayName, setDisplayName] = useState(
+    searchParams.get("name") || ""
+  );
+
+  const mediaOptions = useMemo(
+    () => ({
+      initialAudio: searchParams.get("audio") !== "false",
+      initialVideo: searchParams.get("video") !== "false",
+    }),
+    [searchParams]
+  );
 
   const {
     peerId,
@@ -32,23 +48,40 @@ export default function RoomPage({
     toggleVideo,
     toggleScreenShare,
     replaceTrackForAllPeers,
-  } = useWebRTC(roomId);
+  } = useWebRTC(roomId, mediaOptions);
 
   useEffect(() => {
-    if (joinedRef.current) return;
+    if (!cameFromLanding || joinedRef.current) return;
     joinedRef.current = true;
-    joinRoom();
+    joinRoom(displayName || "Guest");
   }, []);
 
+  const prevPeerCount = useRef(0);
   useEffect(() => {
-    const prevPeerCount = peers.size;
-    if (prevPeerCount > 0) {
-      const lastPeer = Array.from(peers.values()).pop();
-      if (lastPeer) {
-        toast.info(`Peer ${lastPeer.peerId.slice(0, 6)} joined`);
+    if (peers.size > prevPeerCount.current) {
+      const peerArray = Array.from(peers.values());
+      const newest = peerArray[peerArray.length - 1];
+      if (newest) {
+        toast.info(`${newest.displayName} joined`);
       }
     }
+    prevPeerCount.current = peers.size;
   }, [peers.size]);
+
+  const handlePreviewJoin = useCallback(
+    (settings: {
+      roomId: string;
+      displayName: string;
+      audio: boolean;
+      video: boolean;
+    }) => {
+      setShowPreview(false);
+      setDisplayName(settings.displayName);
+      joinedRef.current = true;
+      joinRoom(settings.displayName);
+    },
+    [joinRoom]
+  );
 
   const handleLeave = useCallback(() => {
     leaveRoom();
@@ -58,6 +91,18 @@ export default function RoomPage({
   const handleScreenShare = useCallback(() => {
     toggleScreenShare(replaceTrackForAllPeers);
   }, [toggleScreenShare, replaceTrackForAllPeers]);
+
+  if (showPreview) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <PreviewModal
+          open
+          roomId={roomId}
+          onJoin={handlePreviewJoin}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -76,7 +121,7 @@ export default function RoomPage({
         <ParticipantGrid
           localStream={stream}
           peers={peers}
-          peerId={peerId}
+          localName={displayName || "You"}
         />
       </main>
 

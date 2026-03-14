@@ -2,10 +2,15 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 
-export function useMediaStream() {
+interface MediaStreamOptions {
+  initialAudio?: boolean;
+  initialVideo?: boolean;
+}
+
+export function useMediaStream(options?: MediaStreamOptions) {
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(options?.initialAudio ?? true);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(options?.initialVideo ?? true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const cameraStreamRef = useRef<MediaStream | null>(null);
 
@@ -16,6 +21,12 @@ export function useMediaStream() {
         audio: { echoCancellation: true, noiseSuppression: true },
       });
       cameraStreamRef.current = mediaStream;
+
+      const wantAudio = options?.initialAudio ?? true;
+      const wantVideo = options?.initialVideo ?? true;
+      mediaStream.getAudioTracks().forEach((t) => { t.enabled = wantAudio; });
+      mediaStream.getVideoTracks().forEach((t) => { t.enabled = wantVideo; });
+
       setStream(mediaStream);
       return mediaStream;
     } catch {
@@ -28,7 +39,7 @@ export function useMediaStream() {
       }
       return audioOnly;
     }
-  }, []);
+  }, [options?.initialAudio, options?.initialVideo]);
 
   const stopMedia = useCallback(() => {
     stream?.getTracks().forEach((t) => t.stop());

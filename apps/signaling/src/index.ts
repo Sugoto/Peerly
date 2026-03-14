@@ -14,7 +14,7 @@ const server = Bun.serve({
 
     if (url.pathname === "/ws") {
       const upgraded = server.upgrade(req, {
-        data: { peerId: "", roomId: "" },
+        data: { peerId: "", roomId: "", displayName: "" },
       });
       if (upgraded) return undefined;
       return new Response("WebSocket upgrade failed", { status: 400 });
@@ -32,17 +32,24 @@ const server = Bun.serve({
           case "join": {
             ws.data.peerId = msg.peerId;
             ws.data.roomId = msg.roomId;
-            const existingPeers = joinRoom(msg.roomId, msg.peerId, ws);
+            ws.data.displayName = msg.displayName;
+            const existingPeers = joinRoom(msg.roomId, msg.peerId, msg.displayName, ws);
             const joinResponse: ServerMessage = {
               type: "peer-joined",
               peerId: msg.peerId,
+              displayName: msg.displayName,
               peers: existingPeers,
             };
             ws.send(JSON.stringify(joinResponse));
             broadcastToRoom(
               msg.roomId,
               msg.peerId,
-              JSON.stringify({ type: "peer-joined", peerId: msg.peerId, peers: [] } satisfies ServerMessage)
+              JSON.stringify({
+                type: "peer-joined",
+                peerId: msg.peerId,
+                displayName: msg.displayName,
+                peers: [],
+              } satisfies ServerMessage)
             );
             break;
           }
