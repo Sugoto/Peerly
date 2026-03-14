@@ -14,13 +14,12 @@ import {
   VideoOff,
   Monitor,
   MonitorOff,
-  Link,
   PhoneOff,
   MessageSquare,
   Captions,
   Activity,
+  AudioLines,
 } from "lucide-react";
-import { toast } from "sonner";
 
 interface RoomControlsProps {
   isAudioEnabled: boolean;
@@ -30,14 +29,16 @@ interface RoomControlsProps {
   isCaptionsEnabled: boolean;
   isCaptionsSupported: boolean;
   isStatsVisible: boolean;
+  isNoiseSuppressionEnabled: boolean;
+  peerCount: number;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
   onToggleScreenShare: () => void;
   onToggleChat: () => void;
   onToggleCaptions: () => void;
   onToggleStats: () => void;
+  onToggleNoiseSuppression: () => void;
   onLeave: () => void;
-  roomId: string;
 }
 
 function ControlButton({
@@ -82,21 +83,17 @@ export function RoomControls({
   isCaptionsEnabled,
   isCaptionsSupported,
   isStatsVisible,
+  isNoiseSuppressionEnabled,
+  peerCount,
   onToggleAudio,
   onToggleVideo,
   onToggleScreenShare,
   onToggleChat,
   onToggleCaptions,
   onToggleStats,
+  onToggleNoiseSuppression,
   onLeave,
-  roomId,
 }: RoomControlsProps) {
-  const copyLink = () => {
-    const url = `${window.location.origin}/room/${roomId}`;
-    navigator.clipboard.writeText(url);
-    toast.success("Room link copied to clipboard");
-  };
-
   return (
     <motion.div
       initial={{ y: 20, opacity: 0 }}
@@ -126,6 +123,12 @@ export function RoomControls({
         className="hidden sm:flex"
       />
       <ControlButton
+        tooltip={isNoiseSuppressionEnabled ? "Disable noise suppression" : "Enable noise suppression"}
+        icon={AudioLines}
+        onClick={onToggleNoiseSuppression}
+        variant={isNoiseSuppressionEnabled ? "default" : "secondary"}
+      />
+      <ControlButton
         tooltip={isChatOpen ? "Close chat" : "Open chat"}
         icon={MessageSquare}
         onClick={onToggleChat}
@@ -139,18 +142,15 @@ export function RoomControls({
           variant={isCaptionsEnabled ? "default" : "secondary"}
         />
       )}
-      <ControlButton
-        tooltip={isStatsVisible ? "Hide connection stats" : "Show connection stats"}
-        icon={Activity}
-        onClick={onToggleStats}
-        variant={isStatsVisible ? "default" : "secondary"}
-        className="hidden sm:flex"
-      />
-      <ControlButton
-        tooltip="Copy room link"
-        icon={Link}
-        onClick={copyLink}
-      />
+      {peerCount > 0 && (
+        <ControlButton
+          tooltip={isStatsVisible ? "Hide connection stats" : "Show connection stats"}
+          icon={Activity}
+          onClick={onToggleStats}
+          variant={isStatsVisible ? "default" : "secondary"}
+          className="hidden sm:flex"
+        />
+      )}
 
       <div className="mx-0.5 h-8 w-px bg-border sm:mx-1" />
 

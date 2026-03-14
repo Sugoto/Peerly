@@ -80,15 +80,26 @@ export function useCaptions({ displayName, sendData, onData, peerNames }: UseCap
       upsertCaption(displayName, text, isFinal);
     };
 
+    recognition.onerror = (event: any) => {
+      if (event.error === "not-allowed") {
+        recognitionRef.current = null;
+        setEnabled(false);
+      }
+    };
+
     recognition.onend = () => {
       if (recognitionRef.current) {
         try { recognition.start(); } catch {}
       }
     };
 
-    recognition.start();
-    recognitionRef.current = recognition;
-    setEnabled(true);
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+      setEnabled(true);
+    } catch {
+      recognitionRef.current = null;
+    }
   }, [enabled, displayName, sendData, upsertCaption]);
 
   useEffect(() => {

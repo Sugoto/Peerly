@@ -7,9 +7,11 @@ import { toast } from "sonner";
 import { useWebRTC } from "@/hooks/use-webrtc";
 import { useCaptions } from "@/hooks/use-captions";
 import { useConnectionStats } from "@/hooks/use-connection-stats";
+import { useNoiseSuppression } from "@/hooks/use-noise-suppression";
 import { ParticipantGrid } from "@/components/participant-grid";
 import { RoomControls } from "@/components/room-controls";
 import { ConnectionStatus } from "@/components/connection-status";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import { ChatPanel } from "@/components/chat-panel";
 import { CaptionsOverlay } from "@/components/captions-overlay";
 import { StatsOverlay } from "@/components/stats-overlay";
@@ -73,6 +75,7 @@ export default function RoomPage({
   });
 
   const connectionStats = useConnectionStats(peers);
+  const noiseSuppression = useNoiseSuppression();
 
   useEffect(() => {
     if (!cameFromLanding || joinedRef.current) return;
@@ -116,6 +119,13 @@ export default function RoomPage({
     toggleScreenShare(replaceTrackForAllPeers);
   }, [toggleScreenShare, replaceTrackForAllPeers]);
 
+  const handleNoiseSuppression = useCallback(() => {
+    const replaceAudio = (track: MediaStreamTrack) => {
+      replaceTrackForAllPeers(track);
+    };
+    noiseSuppression.toggle(stream, replaceAudio);
+  }, [noiseSuppression, stream, replaceTrackForAllPeers]);
+
   if (showPreview) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -131,8 +141,9 @@ export default function RoomPage({
         animate={{ y: 0, opacity: 1 }}
         className="flex items-center justify-between border-b border-border px-4 py-3"
       >
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold">Room {roomId}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold">Peerly Room {roomId}</h1>
+          <CopyLinkButton roomId={roomId} />
         </div>
         <ConnectionStatus isConnected={isConnected} peerCount={peers.size} />
       </motion.header>
@@ -167,14 +178,16 @@ export default function RoomPage({
           isCaptionsEnabled={captionsHook.enabled}
           isCaptionsSupported={captionsHook.isSupported}
           isStatsVisible={statsVisible}
+          isNoiseSuppressionEnabled={noiseSuppression.enabled}
+          peerCount={peers.size}
           onToggleAudio={toggleAudio}
           onToggleVideo={toggleVideo}
           onToggleScreenShare={handleScreenShare}
           onToggleChat={() => setChatOpen((prev) => !prev)}
           onToggleCaptions={captionsHook.toggle}
           onToggleStats={() => setStatsVisible((prev) => !prev)}
+          onToggleNoiseSuppression={handleNoiseSuppression}
           onLeave={handleLeave}
-          roomId={roomId}
         />
       </footer>
     </div>

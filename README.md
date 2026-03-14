@@ -5,34 +5,37 @@ Free, encrypted peer-to-peer video and audio calls. Create a room, share the lin
 ## Features
 
 - **Video & Audio Calls** — full HD video or audio-only, your choice
-- **End-to-End Encrypted** — DTLS + SRTP encryption on every stream
-- **Peer-to-Peer** — media flows directly between browsers, never through a server
+- **End-to-End Encrypted** — DTLS + SRTP encryption on every stream, negotiated directly between peers
+- **P2P Chat & File Sharing** — send messages and transfer files through encrypted RTCDataChannel, no server involved
+- **Noise Suppression** — Web Audio DSP pipeline with high/low-pass filters, noise gate, and dynamic compression
+- **Live Captions** — real-time speech-to-text via browser Speech Recognition API, broadcast to all peers
+- **Screen Sharing** — share your screen alongside your camera feed with one click
+- **Connection Stats** — real-time bitrate, latency, packet loss, and resolution via RTCPeerConnection.getStats()
+- **Preview Before Joining** — check camera, mic, and set your display name before entering a room
 - **Instant Rooms** — one click to create, share a link to invite anyone
-- **Preview Before Joining** — check camera, mic, and set your display name before entering
-- **Screen Sharing** — share your screen with all participants
-- **Works Everywhere** — desktop, tablet, or phone — any modern browser
 
 ## Tech Stack
 
 - **Frontend**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, shadcn/ui (CLI v4), Framer Motion
 - **Signaling**: Bun, Hono, native WebSockets
-- **WebRTC**: Native browser APIs (RTCPeerConnection, getUserMedia) with Google STUN servers
+- **WebRTC**: Native browser APIs (RTCPeerConnection, RTCDataChannel, getUserMedia, MediaRecorder)
+- **Audio Processing**: Web Audio API (BiquadFilterNode, DynamicsCompressorNode, AnalyserNode, GainNode)
 - **Infrastructure**: Vercel (frontend) + Railway (signaling server)
-- **Monorepo**: npm workspaces + Turborepo
+- **Monorepo**: Bun workspaces + Turborepo
 
 ## Project Structure
 
 ```
 ├── apps/
-│   ├── web/                    # Next.js frontend
-│   │   ├── app/                # Pages (landing, room)
-│   │   ├── components/         # UI components
-│   │   ├── hooks/              # WebRTC, signaling, media hooks
-│   │   └── lib/                # Types, config, utilities
-│   └── signaling/              # Bun + Hono WebSocket server
-│       └── src/                # Room management, message relay
-├── package.json                # Workspace root
-└── turbo.json                  # Turborepo config
+│   ├── web/                        # Next.js frontend
+│   │   ├── app/                    # Pages (landing, room)
+│   │   ├── components/             # UI components (video, chat, controls, captions, stats)
+│   │   ├── hooks/                  # WebRTC, signaling, media, captions, noise suppression, stats
+│   │   └── lib/                    # Types, config, data channel messages
+│   └── signaling/                  # Bun + Hono WebSocket server
+│       └── src/                    # Room management, message relay
+├── package.json                    # Workspace root
+└── turbo.json                      # Turborepo config
 ```
 
 ## Local Development
@@ -92,11 +95,13 @@ Both auto-deploy on every push to `main`.
 Browser A ←→ Signaling Server ←→ Browser B
     │              (JSON)              │
     │                                  │
-    └──── Direct P2P Media Stream ─────┘
-              (Encrypted)
+    ├──── P2P Media (video/audio) ─────┤
+    ├──── P2P Data (chat/files) ───────┤
+    └──── P2P Captions ────────────────┘
+              (All Encrypted)
 ```
 
-The signaling server is a lightweight Bun + Hono WebSocket server that relays small JSON messages (SDP offers/answers, ICE candidates) to facilitate the initial WebRTC handshake. Once the peer connection is established, all audio and video streams flow directly between browsers — encrypted, with zero server involvement.
+The signaling server is a lightweight Bun + Hono WebSocket server that relays small JSON messages (SDP offers/answers, ICE candidates) to facilitate the initial WebRTC handshake. Once the peer connection is established, all media streams, chat messages, file transfers, and captions flow directly between browsers — encrypted via DTLS/SRTP, with zero server involvement.
 
 ## License
 
