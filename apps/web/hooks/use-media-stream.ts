@@ -9,112 +9,156 @@ interface MediaStreamOptions {
 
 export function useMediaStream(options?: MediaStreamOptions) {
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [isAudioEnabled, setIsAudioEnabled] = useState(options?.initialAudio ?? true);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(options?.initialVideo ?? true);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(options?.initialAudio ?? false);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(options?.initialVideo ?? false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const onTrackReplaceRef = useRef<((track: MediaStreamTrack) => void) | null>(null);
+
+  const getOrCreateStream = useCallback((): MediaStream => {
+    if (streamRef.current) return streamRef.current;
+    const s = new MediaStream();
+    streamRef.current = s;
+    setStream(s);
+    return s;
+  }, []);
 
   const startMedia = useCallback(async () => {
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
-      cameraStreamRef.current = mediaStream;
+    const s = getOrCreateStream();
+    const wantAudio = options?.initialAudio ?? false;
+    const wantVideo = options?.initialVideo ?? false;
 
-      const wantAudio = options?.initialAudio ?? true;
-      const wantVideo = options?.initialVideo ?? true;
-      mediaStream.getAudioTracks().forEach((t) => { t.enabled = wantAudio; });
-      mediaStream.getVideoTracks().forEach((t) => { t.enabled = wantVideo; });
-
-      setStream(mediaStream);
-      return mediaStream;
-    } catch {
-      const audioOnly = await navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .catch(() => null);
-      if (audioOnly) {
-        setStream(audioOnly);
-        setIsVideoEnabled(false);
-      }
-      return audioOnly;
+    if (!wantAudio && !wantVideo) {
+      return s;
     }
-  }, [options?.initialAudio, options?.initialVideo]);
+
+    try {
+      const constraints: MediaStreamConstraints = {};
+      if (wantAudio) constraints.audio = { echoCancellation: true, noiseSuppression: true };
+      if (wantVideo) constraints.video = { width: { ideal: 1280 }, height: { ideal: 720 } };
+
+      const media = await navigator.mediaDevices.getUserMedia(constraints);
+      media.getTracks().forEach((t) => s.addTrack(t));
+      setStream(new MediaStream(s.getTracks()));
+      streamRef.current = s;
+    } catch {
+      if (wantVideo && wantAudio) {
+        try {
+          const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioOnly.getTracks().forEach((t) => s.addTrack(t));
+          setIsVideoEnabled(false);
+          setStream(new MediaStream(s.getTracks()));
+          streamRef.current = s;
+        } catch {}
+      }
+    }
+
+    return s;
+  }, [options?.initialAudio, options?.initialVideo, getOrCreateStream]);
 
   const stopMedia = useCallback(() => {
-    stream?.getTracks().forEach((t) => t.stop());
-    cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     setStream(null);
-  }, [stream]);
+  }, []);
 
-  const toggleAudio = useCallback(() => {
-    if (!stream) return;
-    stream.getAudioTracks().forEach((t) => {
-      t.enabled = !t.enabled;
-    });
-    setIsAudioEnabled((prev) => !prev);
-  }, [stream]);
+  const toggleAudio = useCallback(async () => {
+    const s = getOrCreateStream();
 
-  const toggleVideo = useCallback(() => {
-    if (!stream) return;
-    stream.getVideoTracks().forEach((t) => {
-      t.enabled = !t.enabled;
-    });
-    setIsVideoEnabled((prev) => !prev);
-  }, [stream]);
+    if (isAudioEnabled) {
+      s.getAudioTracks().forEach((t) => {
+        s.removeTrack(t);
+        t.stop();
+      });
+      setIsAudioEnabled(false);
+      setStream(new MediaStream(s.getTracks()));
+    } else {
+      try {
+        const media = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
+        const audioTrack = media.getAudioTracks()[0];
+        s.addTrack(audioTrack);
+        onTrackReplaceRef.current?.(audioTrack);
+        setIsAudioEnabled(true);
+        setStream(new MediaStream(s.getTracks()));
+      } catch {}
+    }
+  }, [isAudioEnabled, getOrCreateStream]);
+
+  const toggleVideo = useCallback(async () => {
+    const s = getOrCreateStream();
+
+    if (isVideoEnabled) {
+      s.getVideoTracks().forEach((t) => {
+        s.removeTrack(t);
+        t.stop();
+      });
+      setIsVideoEnabled(false);
+      setStream(new MediaStream(s.getTracks()));
+    } else {
+      try {
+        const media = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+        const videoTrack = media.getVideoTracks()[0];
+        s.addTrack(videoTrack);
+        onTrackReplaceRef.current?.(videoTrack);
+        setIsVideoEnabled(true);
+        setStream(new MediaStream(s.getTracks()));
+      } catch {}
+    }
+  }, [isVideoEnabled, getOrCreateStream]);
 
   const toggleScreenShare = useCallback(
     async (onTrackReplace?: (track: MediaStreamTrack) => void) => {
-      if (!stream) return;
+      const s = getOrCreateStream();
 
       if (isScreenSharing) {
-        const camStream = cameraStreamRef.current;
-        if (camStream) {
-          const camTrack = camStream.getVideoTracks()[0];
-          stream.getVideoTracks().forEach((t) => {
-            stream.removeTrack(t);
-            t.stop();
-          });
-          stream.addTrack(camTrack);
-          onTrackReplace?.(camTrack);
-        }
+        s.getVideoTracks().forEach((t) => {
+          s.removeTrack(t);
+          t.stop();
+        });
         setIsScreenSharing(false);
+        setIsVideoEnabled(false);
+        setStream(new MediaStream(s.getTracks()));
         return;
       }
 
       try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-        });
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const screenTrack = screenStream.getVideoTracks()[0];
-        stream.getVideoTracks().forEach((t) => {
-          stream.removeTrack(t);
+
+        s.getVideoTracks().forEach((t) => {
+          s.removeTrack(t);
+          t.stop();
         });
-        stream.addTrack(screenTrack);
+        s.addTrack(screenTrack);
         onTrackReplace?.(screenTrack);
         setIsScreenSharing(true);
+        setIsVideoEnabled(true);
+        setStream(new MediaStream(s.getTracks()));
 
         screenTrack.onended = () => {
-          const camStream = cameraStreamRef.current;
-          if (camStream) {
-            const camTrack = camStream.getVideoTracks()[0];
-            stream.getVideoTracks().forEach((t) => stream.removeTrack(t));
-            stream.addTrack(camTrack);
-            onTrackReplace?.(camTrack);
-          }
+          s.getVideoTracks().forEach((t) => {
+            s.removeTrack(t);
+          });
           setIsScreenSharing(false);
+          setIsVideoEnabled(false);
+          setStream(new MediaStream(s.getTracks()));
         };
-      } catch {
-        // user cancelled screen share picker
-      }
+      } catch {}
     },
-    [stream, isScreenSharing]
+    [isScreenSharing, getOrCreateStream]
   );
+
+  const setOnTrackReplace = useCallback((fn: (track: MediaStreamTrack) => void) => {
+    onTrackReplaceRef.current = fn;
+  }, []);
 
   useEffect(() => {
     return () => {
-      stream?.getTracks().forEach((t) => t.stop());
-      cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
@@ -128,5 +172,6 @@ export function useMediaStream(options?: MediaStreamOptions) {
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
+    setOnTrackReplace,
   };
 }

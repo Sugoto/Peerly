@@ -4,13 +4,14 @@ Free, encrypted peer-to-peer video and audio calls. Create a room, share the lin
 
 ## Features
 
-- **Video & Audio Calls** — full HD video or audio-only, your choice
-- **End-to-End Encrypted** — DTLS + SRTP encryption on every stream, negotiated directly between peers
-- **P2P Chat & File Sharing** — send messages and transfer files through encrypted RTCDataChannel, no server involved
-- **Noise Suppression** — Web Audio DSP pipeline with high/low-pass filters, noise gate, and dynamic compression
-- **Live Captions** — real-time speech-to-text via browser Speech Recognition API, broadcast to all peers
-- **Screen Sharing** — share your screen alongside your camera feed with one click
-- **Connection Stats** — real-time bitrate, latency, packet loss, and resolution via RTCPeerConnection.getStats()
+- **End-to-End Encrypted** — AES-256-GCM frame encryption with automatic ECDH P-256 key exchange via WebRTC Encoded Transform. Keys are negotiated over the data channel — the signaling server never sees them. Verification codes let peers confirm no MITM attack.
+- **Adaptive Bitrate** — monitors packet loss and RTT in real-time, automatically adjusts video resolution, framerate, and bitrate across three quality tiers (high/medium/low) using `RTCRtpSender.setParameters()`
+- **P2P Chat & File Sharing** — text messages and chunked file transfers over encrypted RTCDataChannel. No server involved, no file size limits.
+- **Noise Suppression** — Web Audio DSP pipeline with high-pass filter, low-pass filter, noise gate (volume-based), and dynamic compressor
+- **Live Captions** — real-time speech-to-text via browser Speech Recognition API, broadcast to all peers over data channel
+- **Screen Sharing** — one-click screen share, properly releases camera hardware when switching
+- **Connection Stats** — real-time bitrate, latency, packet loss, resolution, and quality tier via `RTCPeerConnection.getStats()`
+- **Hardware-Aware Media** — camera and mic are only acquired when enabled, fully released (`track.stop()`) when disabled. No phantom green lights.
 - **Preview Before Joining** — check camera, mic, and set your display name before entering a room
 - **Instant Rooms** — one click to create, share a link to invite anyone
 
@@ -18,7 +19,8 @@ Free, encrypted peer-to-peer video and audio calls. Create a room, share the lin
 
 - **Frontend**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, shadcn/ui (CLI v4), Framer Motion
 - **Signaling**: Bun, Hono, native WebSockets
-- **WebRTC**: Native browser APIs (RTCPeerConnection, RTCDataChannel, getUserMedia, MediaRecorder)
+- **WebRTC**: Native browser APIs (RTCPeerConnection, RTCDataChannel, RTCRtpSender, Encoded Transform)
+- **Encryption**: Web Crypto API (ECDH P-256, AES-256-GCM, PBKDF2), WebRTC Encoded Transform
 - **Audio Processing**: Web Audio API (BiquadFilterNode, DynamicsCompressorNode, AnalyserNode, GainNode)
 - **Infrastructure**: Vercel (frontend) + Railway (signaling server)
 - **Monorepo**: Bun workspaces + Turborepo
@@ -29,9 +31,9 @@ Free, encrypted peer-to-peer video and audio calls. Create a room, share the lin
 ├── apps/
 │   ├── web/                        # Next.js frontend
 │   │   ├── app/                    # Pages (landing, room)
-│   │   ├── components/             # UI components (video, chat, controls, captions, stats)
-│   │   ├── hooks/                  # WebRTC, signaling, media, captions, noise suppression, stats
-│   │   └── lib/                    # Types, config, data channel messages
+│   │   ├── components/             # UI (video, chat, controls, captions, stats, preview)
+│   │   ├── hooks/                  # WebRTC, signaling, media, E2EE, captions, noise, adaptive bitrate, stats
+│   │   └── lib/                    # E2EE crypto, data channel messages, WebRTC config
 │   └── signaling/                  # Bun + Hono WebSocket server
 │       └── src/                    # Room management, message relay
 ├── package.json                    # Workspace root
@@ -95,13 +97,13 @@ Both auto-deploy on every push to `main`.
 Browser A ←→ Signaling Server ←→ Browser B
     │              (JSON)              │
     │                                  │
-    ├──── P2P Media (video/audio) ─────┤
-    ├──── P2P Data (chat/files) ───────┤
-    └──── P2P Captions ────────────────┘
-              (All Encrypted)
+    ├──── P2P Media (video/audio) ─────┤  ← DTLS/SRTP + AES-256-GCM frame encryption
+    ├──── P2P Data (chat/files) ───────┤  ← DTLS encrypted data channel
+    ├──── P2P Captions ────────────────┤  ← DTLS encrypted data channel
+    └──── ECDH Key Exchange ───────────┘  ← Public keys exchanged via data channel
 ```
 
-The signaling server is a lightweight Bun + Hono WebSocket server that relays small JSON messages (SDP offers/answers, ICE candidates) to facilitate the initial WebRTC handshake. Once the peer connection is established, all media streams, chat messages, file transfers, and captions flow directly between browsers — encrypted via DTLS/SRTP, with zero server involvement.
+The signaling server is a lightweight Bun + Hono WebSocket server that relays small JSON messages (SDP offers/answers, ICE candidates) to facilitate the initial WebRTC handshake. Once connected, all media, chat, files, and captions flow directly between browsers. E2EE keys are exchanged over the data channel so the signaling server has zero knowledge of the encryption keys.
 
 ## License
 

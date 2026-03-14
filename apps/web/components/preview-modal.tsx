@@ -38,62 +38,56 @@ export function PreviewModal({
   const streamRef = useRef<MediaStream | null>(null);
   const [roomId, setRoomId] = useState(initialRoomId);
   const [displayName, setDisplayName] = useState("");
-  const [audioEnabled, setAudioEnabled] = useState(true);
-  const [videoEnabled, setVideoEnabled] = useState(true);
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [videoEnabled, setVideoEnabled] = useState(false);
   const [hasStream, setHasStream] = useState(false);
 
   useEffect(() => {
     setRoomId(initialRoomId);
   }, [initialRoomId]);
 
+  const acquireStream = useCallback(async (video: boolean, audio: boolean) => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setHasStream(false);
+
+    if (!video && !audio) return;
+
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: video ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
+        audio: audio ? { echoCancellation: true, noiseSuppression: true } : false,
+      });
+      streamRef.current = mediaStream;
+      setHasStream(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (!open) return;
-
-    let cancelled = false;
-
-    navigator.mediaDevices
-      .getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: { echoCancellation: true, noiseSuppression: true },
-      })
-      .then((mediaStream) => {
-        if (cancelled) {
-          mediaStream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = mediaStream;
-        setHasStream(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-        }
-      })
-      .catch(() => {
-        setVideoEnabled(false);
-      });
-
     return () => {
-      cancelled = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       setHasStream(false);
-      setAudioEnabled(true);
-      setVideoEnabled(true);
+      setAudioEnabled(false);
+      setVideoEnabled(false);
     };
   }, [open]);
 
   const toggleAudio = useCallback(() => {
-    streamRef.current?.getAudioTracks().forEach((t) => {
-      t.enabled = !t.enabled;
-    });
-    setAudioEnabled((prev) => !prev);
-  }, []);
+    const next = !audioEnabled;
+    setAudioEnabled(next);
+    acquireStream(videoEnabled, next);
+  }, [audioEnabled, videoEnabled, acquireStream]);
 
   const toggleVideo = useCallback(() => {
-    streamRef.current?.getVideoTracks().forEach((t) => {
-      t.enabled = !t.enabled;
-    });
-    setVideoEnabled((prev) => !prev);
-  }, []);
+    const next = !videoEnabled;
+    setVideoEnabled(next);
+    acquireStream(next, audioEnabled);
+  }, [audioEnabled, videoEnabled, acquireStream]);
 
   const handleJoin = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());

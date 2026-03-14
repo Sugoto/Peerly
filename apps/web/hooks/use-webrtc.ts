@@ -247,15 +247,29 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
     [createConnection, send, updatePeers, flushIceCandidates]
   );
 
-  const joinRoom = useCallback(async (displayName: string) => {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const stream = await media.startMedia();
-      if (stream) {
-        localStreamRef.current = stream;
-        break;
+  const replaceOrAddTrack = useCallback((newTrack: MediaStreamTrack) => {
+    peersRef.current.forEach((peer) => {
+      const sender = peer.connection
+        .getSenders()
+        .find((s) => s.track?.kind === newTrack.kind);
+      if (sender) {
+        sender.replaceTrack(newTrack);
+      } else {
+        const s = localStreamRef.current;
+        if (s) {
+          peer.connection.addTrack(newTrack, s);
+        }
       }
-      await new Promise((r) => setTimeout(r, 500));
+    });
+  }, []);
+
+  const joinRoom = useCallback(async (displayName: string) => {
+    const stream = await media.startMedia();
+    if (stream) {
+      localStreamRef.current = stream;
     }
+
+    media.setOnTrackReplace(replaceOrAddTrack);
 
     onMessage(handleMessage);
 
@@ -266,7 +280,7 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
     }
 
     send({ type: "join", roomId, peerId: peerId.current, displayName });
-  }, [connect, onMessage, send, roomId, media, handleMessage]);
+  }, [connect, onMessage, send, roomId, media, handleMessage, replaceOrAddTrack]);
 
   const leaveRoom = useCallback(() => {
     peersRef.current.forEach((peer) => peer.connection.close());
@@ -281,17 +295,6 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
     disconnect();
   }, [media, disconnect]);
 
-  const replaceTrackForAllPeers = useCallback((newTrack: MediaStreamTrack) => {
-    peersRef.current.forEach((peer) => {
-      const sender = peer.connection
-        .getSenders()
-        .find((s) => s.track?.kind === newTrack.kind);
-      if (sender) {
-        sender.replaceTrack(newTrack);
-      }
-    });
-  }, []);
-
   useEffect(() => {
     return () => {
       peersRef.current.forEach((peer) => peer.connection.close());
@@ -304,7 +307,7 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
     joinRoom,
     leaveRoom,
     isConnected,
-    replaceTrackForAllPeers,
+    replaceTrackForAllPeers: replaceOrAddTrack,
     sendData,
     onData,
     ...media,

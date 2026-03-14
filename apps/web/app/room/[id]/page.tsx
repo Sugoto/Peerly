@@ -8,6 +8,8 @@ import { useWebRTC } from "@/hooks/use-webrtc";
 import { useCaptions } from "@/hooks/use-captions";
 import { useConnectionStats } from "@/hooks/use-connection-stats";
 import { useNoiseSuppression } from "@/hooks/use-noise-suppression";
+import { useAdaptiveBitrate } from "@/hooks/use-adaptive-bitrate";
+import { useE2EE } from "@/hooks/use-e2ee";
 import { ParticipantGrid } from "@/components/participant-grid";
 import { RoomControls } from "@/components/room-controls";
 import { ConnectionStatus } from "@/components/connection-status";
@@ -16,6 +18,7 @@ import { ChatPanel } from "@/components/chat-panel";
 import { CaptionsOverlay } from "@/components/captions-overlay";
 import { StatsOverlay } from "@/components/stats-overlay";
 import { PreviewModal } from "@/components/preview-modal";
+import { ShieldCheck } from "lucide-react";
 
 export default function RoomPage({
   params,
@@ -76,6 +79,8 @@ export default function RoomPage({
 
   const connectionStats = useConnectionStats(peers);
   const noiseSuppression = useNoiseSuppression();
+  const qualityLevel = useAdaptiveBitrate(peers);
+  const e2ee = useE2EE(peers, sendData, onData);
 
   useEffect(() => {
     if (!cameFromLanding || joinedRef.current) return;
@@ -120,10 +125,7 @@ export default function RoomPage({
   }, [toggleScreenShare, replaceTrackForAllPeers]);
 
   const handleNoiseSuppression = useCallback(() => {
-    const replaceAudio = (track: MediaStreamTrack) => {
-      replaceTrackForAllPeers(track);
-    };
-    noiseSuppression.toggle(stream, replaceAudio);
+    noiseSuppression.toggle(stream, replaceTrackForAllPeers);
   }, [noiseSuppression, stream, replaceTrackForAllPeers]);
 
   if (showPreview) {
@@ -145,7 +147,18 @@ export default function RoomPage({
           <h1 className="text-lg font-semibold">Peerly Room {roomId}</h1>
           <CopyLinkButton roomId={roomId} />
         </div>
-        <ConnectionStatus isConnected={isConnected} peerCount={peers.size} />
+        <div className="flex items-center gap-2">
+          {e2ee.active && (
+            <div
+              className="hidden items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500 sm:flex"
+              title={e2ee.verificationCode ? `Verification code: ${e2ee.verificationCode}` : "E2EE active"}
+            >
+              <ShieldCheck className="h-3 w-3" />
+              E2EE{e2ee.verificationCode ? ` · ${e2ee.verificationCode}` : ""}
+            </div>
+          )}
+          <ConnectionStatus isConnected={isConnected} peerCount={peers.size} />
+        </div>
       </motion.header>
 
       <div className="relative flex flex-1 overflow-hidden">
@@ -156,7 +169,7 @@ export default function RoomPage({
             localName={displayName || "You"}
           />
           <CaptionsOverlay captions={captionsHook.captions} />
-          <StatsOverlay stats={connectionStats} visible={statsVisible} />
+          <StatsOverlay stats={connectionStats} visible={statsVisible} qualityLevel={qualityLevel} />
         </main>
 
         <ChatPanel

@@ -7,9 +7,10 @@ import { Activity } from "lucide-react";
 interface StatsOverlayProps {
   stats: ConnectionStats | null;
   visible: boolean;
+  qualityLevel?: string;
 }
 
-export function StatsOverlay({ stats, visible }: StatsOverlayProps) {
+export function StatsOverlay({ stats, visible, qualityLevel }: StatsOverlayProps) {
   return (
     <AnimatePresence>
       {visible && stats && (
@@ -40,6 +41,12 @@ export function StatsOverlay({ stats, visible }: StatsOverlayProps) {
               <span>Resolution</span>
               <span className="text-foreground font-mono">{stats.resolution}</span>
             </div>
+            {qualityLevel && (
+              <div className="flex justify-between gap-6 border-t border-border pt-1 mt-1">
+                <span>Quality</span>
+                <span className="text-foreground font-mono capitalize">{qualityLevel}</span>
+              </div>
+            )}
           </div>
         </motion.div>
       )}

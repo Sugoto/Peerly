@@ -19,6 +19,7 @@ import {
   MessageSquare,
   Share2,
   Captions,
+  BarChart3,
 } from "lucide-react";
 
 const container = {
@@ -182,37 +183,47 @@ export default function Home() {
           transition={{ delay: 0.8, duration: 0.7, ease: "easeOut" }}
           className="mt-24 w-full max-w-5xl px-4"
         >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             {[
               {
                 icon: Zap,
-                title: "Instant Setup",
-                desc: "No accounts, no downloads. Click and you're live in seconds.",
+                title: "Instant Rooms",
+                desc: "No accounts, no downloads. One click to create, share a link to invite anyone.",
               },
               {
                 icon: Lock,
-                title: "End-to-End Encrypted",
-                desc: "DTLS + SRTP encryption on every stream. We never see or hear your calls.",
+                title: "E2E Encrypted",
+                desc: "AES-256-GCM frame encryption with automatic ECDH key exchange. Zero-knowledge by default.",
+              },
+              {
+                icon: BarChart3,
+                title: "Adaptive Bitrate",
+                desc: "Video quality adjusts in real-time based on network conditions. No buffering.",
               },
               {
                 icon: MessageSquare,
-                title: "P2P Chat & File Sharing",
-                desc: "Send messages and files directly between browsers. Encrypted, no server.",
+                title: "P2P Chat & Files",
+                desc: "Send messages and transfer files directly between browsers via encrypted data channel.",
               },
               {
                 icon: AudioLines,
                 title: "Noise Suppression",
-                desc: "Built-in audio DSP pipeline with noise gate, filters, and compression.",
+                desc: "Web Audio DSP pipeline with noise gate, high/low-pass filters, and dynamic compression.",
               },
               {
                 icon: Captions,
                 title: "Live Captions",
-                desc: "Real-time speech-to-text powered by the browser. Shared with all peers.",
+                desc: "Real-time speech-to-text powered by the browser. Broadcast to all participants.",
               },
               {
                 icon: Share2,
                 title: "Screen Sharing",
                 desc: "Share your screen with one click. Works alongside your camera feed.",
+              },
+              {
+                icon: Globe,
+                title: "Works Everywhere",
+                desc: "Desktop, tablet, or phone. Any modern browser, anyone in the world.",
               },
             ].map(({ icon: Icon, title, desc }, i) => (
               <motion.div

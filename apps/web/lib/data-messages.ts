@@ -2,7 +2,8 @@ export type DataMessage =
   | { type: "chat"; text: string; sender: string; timestamp: number }
   | { type: "file-meta"; fileId: string; name: string; size: number; mimeType: string; sender: string }
   | { type: "file-chunk"; fileId: string; chunk: string; index: number; total: number }
-  | { type: "caption"; text: string; sender: string; isFinal: boolean };
+  | { type: "caption"; text: string; sender: string; isFinal: boolean }
+  | { type: "e2ee-pubkey"; publicKey: string };
 
 export const FILE_CHUNK_SIZE = 16 * 1024;
 
