@@ -194,38 +194,26 @@ export function useWebRTC(roomId: string, options?: WebRTCOptions) {
     [createConnection, send, updatePeers, flushIceCandidates]
   );
 
-  const addLocalTracksToPeers = useCallback((stream: MediaStream) => {
-    peersRef.current.forEach((peer) => {
-      const senders = peer.connection.getSenders();
-      stream.getTracks().forEach((track) => {
-        const existing = senders.find((s) => s.track?.kind === track.kind);
-        if (!existing) {
-          peer.connection.addTrack(track, stream);
-        }
-      });
-    });
-  }, []);
-
   const joinRoom = useCallback(async (displayName: string) => {
-    onMessage(handleMessage);
-    await connect();
-    send({ type: "join", roomId, peerId: peerId.current, displayName });
-
-    const startWithRetry = async (attempts = 3): Promise<MediaStream | null> => {
-      for (let i = 0; i < attempts; i++) {
-        const stream = await media.startMedia();
-        if (stream) return stream;
-        await new Promise((r) => setTimeout(r, 500));
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const stream = await media.startMedia();
+      if (stream) {
+        localStreamRef.current = stream;
+        break;
       }
-      return null;
-    };
-
-    const localStream = await startWithRetry();
-    if (localStream) {
-      localStreamRef.current = localStream;
-      addLocalTracksToPeers(localStream);
+      await new Promise((r) => setTimeout(r, 500));
     }
-  }, [connect, onMessage, send, roomId, media, handleMessage, addLocalTracksToPeers]);
+
+    onMessage(handleMessage);
+
+    try {
+      await connect();
+    } catch {
+      return;
+    }
+
+    send({ type: "join", roomId, peerId: peerId.current, displayName });
+  }, [connect, onMessage, send, roomId, media, handleMessage]);
 
   const leaveRoom = useCallback(() => {
     peersRef.current.forEach((peer) => peer.connection.close());

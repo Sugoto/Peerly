@@ -13,8 +13,12 @@ export const ICE_SERVERS: RTCIceServer[] = [
   },
 ];
 
-export const SIGNALING_URL =
-  process.env.NEXT_PUBLIC_SIGNALING_URL || "ws://localhost:4000/ws";
+export function getSignalingUrl(): string {
+  if (typeof window !== "undefined") {
+    return process.env.NEXT_PUBLIC_SIGNALING_URL || "ws://localhost:4000/ws";
+  }
+  return "";
+}
 
 export function createPeerConnection(): RTCPeerConnection {
   return new RTCPeerConnection({ iceServers: ICE_SERVERS });
